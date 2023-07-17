@@ -112,12 +112,12 @@ Specify you domain names and contact emails for these domains in the `edit_dot_e
 
 First make an `.env` file
 ```bash
-cp edit_dot_env .env
+cp edit_dot_env dot.env
 ```
 
 Now edit `.env` file to change your settings.
 ```bash
-nano .env
+nano dot.env
 ```
 
 Here are properties to change based on your specific Web domain. Please note, for now this only supports one domain specified by the `DOMAINS` variable (the plural is asperational..).

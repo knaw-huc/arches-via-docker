@@ -15,4 +15,4 @@ COPY nginx.sh /customization/nginx.sh
 RUN chmod +x /customization/nginx.sh
 
 EXPOSE 80
-CMD ["/customization/nginx.sh"]
+CMD ["nginx", "-g", "daemon off;"]

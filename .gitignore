@@ -1,5 +1,5 @@
 *.ini
 *.log
 *.env
-.env
+.idea
 /arches/arches_data/packages/

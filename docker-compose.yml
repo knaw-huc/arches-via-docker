@@ -6,7 +6,7 @@ services:
     container_name: arches_db
     image: postgis/postgis:14-3.2
     env_file:
-      - ./.env
+      - dot.env
     environment:
       - PGUSER=postgres
       - POSTGRES_USER=postgres
@@ -18,8 +18,6 @@ services:
         - postgres-log:/var/log/postgresql
         - ./init-unix.sql:/docker-entrypoint-initdb.d/init.sql # to set up the DB template
         - ../arches_data/:/arches_data
-    ports:
-      - '5434:5432'
     logging:
       driver: "json-file"
       options:
@@ -33,17 +31,14 @@ services:
     image: elasticsearch:8.5.3
     restart: always
     env_file:
-      - ./.env
+      - dot.env
     environment:
-      - TZ="${TZ}"
+      - TZ="PST"
       - xpack.security.enabled=false
       - discovery.type=single-node
       - "ES_JAVA_OPTS=-Xms400m -Xmx400m"
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
-    ports:
-      - "9202:9200"
-      - "9302:9300"
     logging:
       driver: "json-file"
       options:
@@ -56,8 +51,6 @@ services:
     container_name: arches_redis
     image: "redis:6-alpine"
     restart: always
-    ports:
-      - "6379:6379"
     volumes:
       - "redisdata:/data"
     command: "redis-server"
@@ -73,33 +66,26 @@ services:
     container_name: arches
     image: arches
     env_file:
-      - ./.env
+      - dot.env
     build:
       context: .
       dockerfile: arches/Dockerfile
       args:
-        ARCHES_PROJECT: ${ARCHES_PROJECT}
-        ARCHES_ROOT: ${ARCHES_ROOT}
-        APP_ROOT: ${APP_ROOT}
-        APP_COMP_FOLDER: ${APP_COMP_FOLDER}
+        ARCHES_PROJECT: "arches_proj"
+        ARCHES_ROOT: "/arches_app"
+        APP_ROOT: "/arches_app/arches_proj"
+        APP_COMP_FOLDER: "/arches_app/arches_proj/arches_proj"
     environment:
-      - DEBUG="${DJANGO_DEBUG}"
-      - ARCHES_PROJECT=${ARCHES_PROJECT}
+      - DEBUG=True
+      - ARCHES_PROJECT=arches_proj
     stdin_open: true # docker run -i
     tty: true        # docker run -t
-    ports:
-      - "5432:5432"
-      - 8004:8000
-      - 5678:5678
-      - 5984:5984
     depends_on:
       - arches_db
       - arches_elasticsearch
       - arches_redis
     command:
       - run_arches
-    expose:
-      - 8004:8000
     volumes:
       - arches-log:/web_root/logs
       - arches-static:/static_root
@@ -113,56 +99,23 @@ services:
     networks:
       - arches_net
 
-  arches_webpack:
-    container_name: arches_webpack
-    image: arches/arches_webpack
-    build: ./webpack
-    environment:
-      COMPOSE_PROJECT_NAME: "${COMPOSE_PROJECT_NAME}"
-      DJANGO_DEBUG: "${DJANGO_DEBUG}"
-    deploy:
-      restart_policy:
-        condition: on-failure
-        delay: 15s
-        max_attempts: 30
-        window: 1200s
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./:/workdir:ro
-    depends_on:
-      - arches
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1k"
-        max-file: "3"
-    networks:
-      - arches_net
-
   nginx:
     container_name: nginx
     build: ./nginx
     image: arches_via_docker/nginx
     env_file:
-      - ./.env
-    environment:
-      - DOMAINS="${DOMAINS}"
-      - DEPLOY_HOST="${DEPLOY_HOST}"
-      - CERT_PATH="${CERT_PATH}"
-      - DJANGO_PORT="${DJANGO_PORT}"
+      - dot.env
     volumes:
-      - logs_nginx:/logs/nginx
-      - nginx_ssl:/etc/nginx/ssl
-      - certbot_certs:/etc/letsencrypt
-      - arches_certbot:$CERT_PATH
       - arches-static:/static_root
-      - ./html:$NGINX_HTML_PATH
-    ports:
-      - "80:80"
-      - "443:443"
+      - ./html:/var/www/html/arches.globalise.dev.diginfra.net
     restart: always
     depends_on:
       - arches
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.arches.entrypoints=http"
+      - "traefik.http.routers.arches.rule=Host(`arches.globalise.dev.diginfra.net`)"
+      - "traefik.http.services.arches.loadbalancer.server.port=80"
     logging:
       driver: "json-file"
       options:
@@ -171,60 +124,18 @@ services:
     networks:
       - arches_net
 
-  certbot:
-    container_name: certbot
-    build: ./certbot
-    image: arches_oc/certbot
-    env_file:
-      - ./.env
-    volumes:
-      - certbot_certs:/etc/letsencrypt
-      - arches_certbot:$CERT_PATH
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1k"
-        max-file: "3"
-    networks:
-      - arches_net
-
-  cron:
-    container_name: cron
-    build: ./cron
-    image: arches_via_docker/cron
-    environment:
-      COMPOSE_PROJECT_NAME: "${COMPOSE_PROJECT_NAME}"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./:/workdir:ro
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1k"
-        max-file: "3"
-    networks:
-      - arches_net
-
 networks:
   arches_net:
     driver: bridge
     name: arches_net
+    external:
+      name: traefik-public
 
 volumes:
-  nginx_ssl:
-    external: true
-  certbot_certs:
-    external: true
-  arches_certbot:
-    external: true
   redisdata:
-  couchdb-data:
-  couchdb-log:
   postgres-data:
   postgres-log:
   elasticsearch-data:
   arches-log:
   arches-static:
   arches-app:
-  logs_nginx:
